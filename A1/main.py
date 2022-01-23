@@ -172,9 +172,9 @@ def question_two():
 
 def question_three():
     # Question 3, part a: Mini-batch size of 1, 10, 1000
-    batch_sizes = [1]
+    batch_sizes = [1, 10, 1000]
     # Question 3, part b: Vary the learning rate as 1.0, 0.1, 0.01, 0.001
-    learning_rates = [0.1]#, 0.1, 0.01, 0.001]
+    learning_rates = [0.1, 0.01, 0.001]
     momentum = 0
     epochs = 2
 
