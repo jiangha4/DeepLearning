@@ -71,11 +71,11 @@ def train_mse(dataloader, model, loss_fn, optimizer):
     size = len(dataloader.dataset)
     for batch, (X, y) in enumerate(dataloader):
         # Compute prediction and loss
-        pred = model(X)
-        corrected_preds = (torch.max(pred, dim=1)[1]).float()
+        target = nn.functional.one_hot(y, 10)
 
-        loss = loss_fn(corrected_preds, y.float())
-        loss.requires_grad = True
+        pred = model(X.float())
+        loss = loss_fn(pred, target.float())
+        #loss.requires_grad = True
 
         # Backpropagation
         optimizer.zero_grad()
@@ -95,9 +95,11 @@ def test_mse(dataloader, model, loss_fn):
 
     with torch.no_grad():
         for X, y in dataloader:
-            pred = model(X)
-            corrected_preds = (torch.max(pred, dim=1)[1]).float()
-            test_loss += loss_fn(corrected_preds, y.float()).item()
+            target = nn.functional.one_hot(y, 10)
+
+            pred = model(X.float())
+            #corrected_preds = (torch.max(pred, dim=1)[1]).float()
+            test_loss += loss_fn(pred, target.float()).item()
             correct += (pred.argmax(1) == y).type(torch.float).sum().item()
 
     test_loss /= num_batches
@@ -149,11 +151,14 @@ def mean_square_loss(model, learning_rate, epochs, trainloader, testloader):
 
 def sigmoid_activation(learning_rate, epochs, train_loader, test_loader, x_axis):
     model_cel = models.LeNetSigmoid()
-    file_template = "graphs6/s-%s-lr-%s-%s.png"
+    file_template = "graphs8/s-%s-lr-%s-%s.png"
     loss_fn = "cel"
     # Cross Entropy Loss
     training_loss, testing_loss, accuracy_list = cross_entropy_loss(model_cel, learning_rate, epochs, train_loader,
                                                                     test_loader)
+
+    model_path = "model2/sig-cel-lr-%s" % str(learning_rate)
+    torch.save(model_cel, model_path)
 
     file_name = file_template % (loss_fn, str(learning_rate), "training")
     plot_data(x_axis, training_loss, "Epochs", "Training Loss", "Sigmoid Activation Training Loss, Learning Rate: %s" % str(learning_rate), file_name)
@@ -165,7 +170,7 @@ def sigmoid_activation(learning_rate, epochs, train_loader, test_loader, x_axis)
     plot_data(x_axis, accuracy_list, "Epochs", "Accuracy", "Sigmoid Activation Accuracy, Learning Rate: %s" % str(learning_rate), file_name)
 
     model_mse = models.LeNetSigmoid()
-    training_loss, testing_loss, accuracy_list = mean_square_loss(model_mse, learning_rate, epochs, train_loader, str(learning_rate))
+    training_loss, testing_loss, accuracy_list = mean_square_loss(model_mse, learning_rate, epochs, train_loader, test_loader)
     loss_fn = "mse"
 
     # Mean Square Error Loss
@@ -181,14 +186,14 @@ def sigmoid_activation(learning_rate, epochs, train_loader, test_loader, x_axis)
 
 def tanh_activation(learning_rate, epochs, train_loader, test_loader, x_axis):
     model_cel = models.LeNetTanh()
-    file_template = "graphs6/t-%s-lr-%s-%s.png"
+    file_template = "graphs8/t-%s-lr-%s-%s.png"
     loss_fn = "cel"
     # Cross Entropy Loss
     training_loss, testing_loss, accuracy_list = cross_entropy_loss(model_cel, learning_rate, epochs, train_loader,
                                                                     test_loader)
 
-    if learning_rate == 0.001:
-        torch.save(model_cel, "saved_model")
+    model_path = "model3/tanh-cel-lr-%s" % str(learning_rate)
+    torch.save(model_cel, model_path)
 
     file_name = file_template % (loss_fn, str(learning_rate), "training")
     plot_data(x_axis, training_loss, "Epochs", "Training Loss", "Tanh Activation Training Loss, Learning Rate: %s" % str(learning_rate), file_name)
@@ -206,16 +211,16 @@ def tanh_activation(learning_rate, epochs, train_loader, test_loader, x_axis):
     file_name = file_template % (loss_fn, str(learning_rate), "training")
     plot_data(x_axis, training_loss, "Epochs", "Training Loss", "Tanh Activation Training Loss, Learning Rate: %s" % str(learning_rate), file_name)
 
-    file_name = file_template % (loss_fn, str(learning_rate), "training")
+    file_name = file_template % (loss_fn, str(learning_rate), "testing")
     plot_data(x_axis, testing_loss, "Epochs", "Testing Loss", "Tanh Activation Testing Loss, Learning Rate: %s" % str(learning_rate), file_name)
 
-    file_name = file_template % (loss_fn, str(learning_rate), "training")
+    file_name = file_template % (loss_fn, str(learning_rate), "accuracy")
     plot_data(x_axis, accuracy_list, "Epochs", "Accuracy", "Tanh Activation Accuracy, Learning Rate: %s" % str(learning_rate), file_name)
 
 
 
 def question_one(rate, epochs, train_loader, test_loader, x_axis):
-    sigmoid_activation(rate, epochs, train_loader, test_loader, x_axis)
+    #sigmoid_activation(rate, epochs, train_loader, test_loader, x_axis)
     tanh_activation(rate, epochs, train_loader, test_loader, x_axis)
 
 
@@ -223,7 +228,7 @@ def question_two(epochs, train_loader, test_loader, x_axis):
     model = models.LeNetReLu()
     learning_rate = 0.001
 
-    file_template = "graphs4/reLu-%s-lr-%s-%s.png"
+    file_template = "graphs9/reLu-%s-lr-%s-%s.png"
     loss_fn = "cel"
     # Cross Entropy Loss
     file_name = file_template % (loss_fn, str(learning_rate), "training")
@@ -242,7 +247,7 @@ def question_three(epochs, train_loader, test_loader, x_axis):
     model = models.FiveLayerCNN()
     learning_rate = 0.01
 
-    file_template = "graphs4/5layerCNN-%s.png"
+    file_template = "graphs9/5layerCNN-%s.png"
 
     start = time.process_time()
     training_loss, testing_loss, accuracy_list = cross_entropy_loss(model, learning_rate, epochs, train_loader,
@@ -261,19 +266,63 @@ def question_three(epochs, train_loader, test_loader, x_axis):
     plot_data(x_axis, accuracy_list, "Epochs", "Accuracy", "5 Layer CNN Accuracy", file_name)
 
 
+def visualize_layer(test_loader):
+    model = torch.load("model2/tanh-cel-lr-0.01")
+    no_of_layers = 0
+    conv_layers = []
+
+    j = 13
+    i = 0
+    for x, y in test_loader:
+        if i == j:
+            plt.imshow(np.transpose(x[0].numpy(), (1, 2, 0)))
+            plt.show()
+
+            model_children = list(model.children())
+
+            for child in model_children:
+                if type(child) == nn.Conv2d:
+                    no_of_layers += 1
+                    conv_layers.append(child)
+                elif type(child) == nn.Sequential:
+                    for layer in child.children():
+                        if type(layer) == nn.Conv2d:
+                            no_of_layers += 1
+                            conv_layers.append(layer)
+
+            results = [conv_layers[0](x)]
+            for i in range(1, len(conv_layers)):
+                results.append(conv_layers[i](results[-1]))
+            outputs = results
+
+            for num_layer in range(len(outputs)):
+                plt.figure(figsize=(50, 10))
+                layer_viz = outputs[num_layer][0, :, :, :]
+                layer_viz = layer_viz.data
+                print("Layer ", num_layer + 1)
+                for i, filter in enumerate(layer_viz):
+                    if i == 16:
+                        break
+                    plt.subplot(2, 8, i + 1)
+                    plt.imshow(filter, cmap='gray')
+                    plt.axis("off")
+                plt.show()
+        else:
+            i = i + 1
+
 def main():
     learning_rate = [0.1, 0.01, 0.001]
-    # learning_rate = [0.1]
     epochs = 50
     x_axis = np.arange(1, epochs+1, step=1)
     train_loader, test_loader, dataset_sizes = get_data(30)
 
-    for rate in learning_rate:
-        question_one(rate, epochs, train_loader, test_loader, x_axis)
+    # for rate in learning_rate:
+    #     question_one(rate, epochs, train_loader, test_loader, x_axis)
 
-    #question_two(epochs, train_loader, test_loader, x_axis)
-    #question_three(epochs, train_loader, test_loader, x_axis) - # 2045.68132 seconds
+    question_two(epochs, train_loader, test_loader, x_axis)
+    #question_three(epochs, train_loader, test_loader, x_axis) # 2045.68132 seconds
 
+    #visualize_layer(test_loader)
 
 if __name__ == "__main__":
     main()
