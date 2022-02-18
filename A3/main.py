@@ -29,7 +29,7 @@ def get_custom_data(size, batch_size):
     img_index = 0
     label_index = 1
 
-    counter = np.zeros(size)
+    counter = np.zeros(10)
     customDataset = CustomDataset([], [])
 
     trainset, _ = get_data(batch_size)
