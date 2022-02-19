@@ -32,7 +32,7 @@ def get_custom_data(size, batch_size):
     counter = np.zeros(10)
     customDataset = CustomDataset([], [])
 
-    trainset, _ = get_data(batch_size)
+    trainset, testset = get_data(batch_size)
 
     for data in trainset:
         image = data[img_index]
@@ -43,11 +43,13 @@ def get_custom_data(size, batch_size):
             customDataset.targets.append(deepcopy(label))
             counter[label] += 1
 
-        if sum(counter) == size*10:
+        if sum(counter) >= size*10:
             break
 
     trainloader = torch.utils.data.DataLoader(customDataset, batch_size=batch_size, shuffle=True)
-    return trainloader
+    testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size, shuffle=True)
+
+    return trainloader, testloader
 
 def imshow(inp, title=None):
     """Imshow for Tensor."""
@@ -86,6 +88,7 @@ def get_data(batch_size):
     return trainset, testset
 
 def train(dataloader, model, loss_fn, optimizer):
+    model.train()
     size = len(dataloader.dataset)
     for batch, (X, y) in enumerate(dataloader):
         # Compute prediction and loss
@@ -101,24 +104,24 @@ def train(dataloader, model, loss_fn, optimizer):
             loss, current = loss.item(), batch * len(X)
             print(f"loss: {loss:>7f}  [{current:>5d}/{size:>5d}]")
 
-    return loss.item()
+    return loss
 
 
-def test(dataloader, model, loss_fn):
+def test(dataloader, model):
+    model.eval()
     size = len(dataloader.dataset)
-    num_batches = len(dataloader)
-    test_loss, correct = 0, 0
+    correct = 0
 
     with torch.no_grad():
         for X, y in dataloader:
             pred = model(X)
-            test_loss += loss_fn(pred, y).item()
+            #test_loss += loss_fn(pred, y).item()
             correct += (pred.argmax(1) == y).type(torch.float).sum().item()
 
-    test_loss /= num_batches
+    #test_loss /= num_batches
     correct /= size
-    print(f"Test Error: \n Accuracy: {(100 * correct):>0.1f}%, Avg loss: {test_loss:>8f} \n")
-    return test_loss, correct
+    print(f"Test Error: \n Accuracy: {(100 * correct):>0.1f}%")
+    return correct
 
 
 def visualize_data(dataloader):
@@ -130,7 +133,7 @@ def visualize_data(dataloader):
 
     imshow(out)
 
-def create_plot(x_axis, errors):
+def create_plot(x_axis, errors, title, ylabel):
     i = 0
     for error in errors:
         i += 10
@@ -138,8 +141,8 @@ def create_plot(x_axis, errors):
         plt.plot(x_axis, error, label=graph_name)
 
     plt.xlabel("Epochs")
-    plt.ylabel("Train Error")
-    plt.title("Train Error vs Epochs for ResNet50")
+    plt.ylabel(ylabel)
+    plt.title(title)
     plt.legend()
     plt.show()
 
@@ -181,11 +184,12 @@ def create_pretrained_vgg():
     return model
 
 def main():
-    epochs = 50
+    epochs = 30
     x_axis = np.arange(1, epochs + 1, step=1)
     sizes = [10, 20, 30, 40, 50, 60, 70, 80, 90]
-    batch_size = 10
+    batch_size = 1000
     train_error_record = []
+    accuracy_record = []
 
     for size in sizes:
         model = create_pretrained_resnet()
@@ -194,15 +198,24 @@ def main():
         optimizer_ft = optim.SGD(model.parameters(), lr=0.01)
 
         train_errors = []
-        trainloader = get_custom_data(size, batch_size)
+        test_accuracy = []
+
+        trainloader, testloader = get_custom_data(size, batch_size)
         for epoch in range(0, epochs):
             print("Epoch %s:" % epoch)
             train_loss = train(trainloader, model, criterion, optimizer_ft)
+            accuracy = test(testloader, model)
+            test_accuracy.append(accuracy)
             train_errors.append(train_loss)
+
+        accuracy_record.append(test_accuracy)
         train_error_record.append(train_errors)
 
     print(train_error_record)
-    create_plot(x_axis, train_error_record)
+    print(accuracy_record)
+    create_plot(x_axis, train_error_record, "Train Error vs Epochs for ResNet50", "Train Error")
+    create_plot(x_axis, accuracy_record, "Accuracy vs Epoch for ResNet50", "Accuracy")
+
 
 
 if __name__ == '__main__':
