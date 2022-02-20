@@ -31,8 +31,16 @@ def get_custom_data(size, batch_size):
 
     counter = np.zeros(10)
     customDataset = CustomDataset([], [])
+    customTestDataset = CustomDataset([], [])
 
     trainset, testset = get_data(batch_size)
+
+    for i in range(0, 3000):
+        image = testset[i][img_index]
+        label = testset[i][label_index]
+
+        customTestDataset.data.append(deepcopy(image))
+        customTestDataset.targets.append(deepcopy(label))
 
     for data in trainset:
         image = data[img_index]
@@ -47,7 +55,7 @@ def get_custom_data(size, batch_size):
             break
 
     trainloader = torch.utils.data.DataLoader(customDataset, batch_size=batch_size, shuffle=True)
-    testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size, shuffle=True)
+    testloader = torch.utils.data.DataLoader(customTestDataset, batch_size=batch_size, shuffle=True)
 
     return trainloader, testloader
 
@@ -187,7 +195,7 @@ def main():
     epochs = 30
     x_axis = np.arange(1, epochs + 1, step=1)
     sizes = [10, 20, 30, 40, 50, 60, 70, 80, 90]
-    batch_size = 1000
+    batch_size = 100
     train_error_record = []
     accuracy_record = []
 
