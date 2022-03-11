@@ -1,3 +1,5 @@
+import copy
+
 import numpy as np
 import random
 import cv2
@@ -34,6 +36,7 @@ class Autoencoder(nn.Module):
         x = self.decoder(x)
         return x
 
+
 class CustomDataset(Dataset):
     def __init__(self, data=[], targets=[]):
         self.data = data
@@ -48,11 +51,12 @@ class CustomDataset(Dataset):
     def __len__(self):
         return len(self.data)
 
+
 def add_noise(img, pollution_rate):
     row, col = img.shape
     num_pixels = row * col
 
-    num_polluted_images = int(num_pixels * pollution_rate/2)
+    num_polluted_images = int((num_pixels * pollution_rate)/2)
 
     for i in range(num_polluted_images):
         y_coord = random.randint(0, row - 1)
@@ -65,28 +69,36 @@ def add_noise(img, pollution_rate):
 
     return img
 
-def get_custom_data(dataset, batch_size=64):
+
+def get_custom_data(dataset, pollution_rate, batch_size=64):
     img_index = 0
     label_index = 1
 
     custom_train_dataset = CustomDataset()
+    custom_dataset = CustomDataset()
 
     convert_tensor = transforms.ToTensor()
-    pollution_rate = .1
-    print("Creating polluted data with rate: {}", pollution_rate)
+    print("Creating polluted data with rate: {}".format(pollution_rate))
     for data in dataset:
-        label = data[label_index]
-        img = np.asarray(data[img_index])
+        label = copy.deepcopy(data[label_index])
+        pimg = copy.deepcopy(np.asarray(data[img_index]))
+        img = copy.deepcopy(np.asarray(data[img_index]))
 
-        polluted_img = add_noise(img, pollution_rate)
-        tensor_img = convert_tensor(polluted_img)
+        polluted_img = add_noise(pimg, pollution_rate)
+        polluted_tensor_img = convert_tensor(polluted_img)
+        tensor_img = convert_tensor(img)
 
-        custom_train_dataset.data.append(tensor_img)
+        custom_train_dataset.data.append(polluted_tensor_img)
         custom_train_dataset.targets.append(label)
 
-    dataloader = torch.utils.data.DataLoader(custom_train_dataset, batch_size=batch_size, shuffle=True)
+        custom_dataset.data.append(tensor_img)
+        custom_dataset.targets.append(label)
 
-    return dataloader
+    polluted_dataloader = torch.utils.data.DataLoader(custom_train_dataset, batch_size=batch_size)
+    normal_dataloader = torch.utils.data.DataLoader(custom_dataset, batch_size=batch_size)
+
+    return polluted_dataloader, normal_dataloader
+
 
 def get_data():
     trainset = datasets.MNIST('./data', download=True, train=True)
@@ -94,17 +106,18 @@ def get_data():
 
     return trainset, testset
 
-def test(model, testset):
+
+def test(model, testset, polluation_rate):
     output = []
+    batch_size = 64
+    polluted_dataloader, normal_dataloader = get_custom_data(testset, polluation_rate, batch_size=batch_size)
 
-    testloader = get_custom_data(testset)
-
-    for i, (data, img) in enumerate(zip(testloader, testset)):
-        if i >= 10: break
-        print(i)
-        polluated_img, _  = data
-        recon = model(polluated_img)
-        output.append((img, polluated_img, recon))
+    for i, (pdata, data) in enumerate(zip(polluted_dataloader, normal_dataloader)):
+        if i >= 2: break
+        img, _ = data
+        polluted_img, _ = pdata
+        recon = model(polluted_img)
+        output.append((img, polluted_img, recon),)
 
     return output
 
@@ -129,31 +142,57 @@ def train(model, trainloader, num_epochs=5, learning_rate=1e-3):
         outputs.append((epoch, img, recon),)
     return outputs
 
+
+def create_plots(image_vector):
+    for img, pollutated_img, recon in image_vector:
+        plt.figure(figsize=(10, 3))
+        nimg = img.detach().numpy()
+        pimg = pollutated_img.detach().numpy()
+        recon = recon.detach().numpy()
+
+        j = 0
+        for i, item in enumerate(nimg):
+            if i >= 10: break
+            if i % 2 != 1: continue
+            else:
+                plt.subplot(3, 5, j + 1)
+                plt.imshow(item[0])
+                j += 1
+
+        j = 0
+        for i, item in enumerate(pimg):
+            if i >= 10: break
+            if i % 2 != 0: continue
+            else:
+                plt.subplot(3, 5, 5 + j + 1)
+                plt.imshow(item[0])
+                j += 1
+
+        j = 0
+        for i, item in enumerate(recon):
+            if i >= 10: break
+            if i % 2 != 0: continue
+            else:
+                plt.subplot(3, 5, 10 + j + 1)
+                plt.imshow(item[0])
+                j += 1
+
+    plt.show()
+
+
+def train_model(model, trainset, pollution_rate):
+    polluated_trainloader, normal_trainloader = get_custom_data(trainset, pollution_rate=pollution_rate)
+    max_epochs = 20
+    train(model, polluated_trainloader, num_epochs=max_epochs)
+
 def main():
-    trainset, testset = get_data()
-    trainloader = get_custom_data(trainset)
+    pollution_rate = [.2, .4, .6, .8, 1]
     model = Autoencoder()
-    max_epochs = 2
-    outputs = train(model, trainloader, num_epochs=max_epochs)
-    imgs = test(model, testset)
-
-    return imgs
-
-    # for k in range(0, max_epochs, 5):
-    #     plt.figure(figsize=(9, 2))
-    #     imgs = outputs[k][1].detach().numpy()
-    #     recon = outputs[k][2].detach().numpy()
-    #     for i, item in enumerate(imgs):
-    #         if i >= 9: break
-    #         plt.subplot(2, 9, i + 1)
-    #         plt.imshow(item[0])
-    #
-    #     for i, item in enumerate(recon):
-    #         if i >= 9: break
-    #         plt.subplot(2, 9, 9 + i + 1)
-    #         plt.imshow(item[0])
-    #
-    # plt.show()
+    trainset, testset = get_data()
+    for rate in pollution_rate:
+        train_model(model, trainset, rate)
+        imgs = test(model, testset, rate)
+        create_plots(imgs)
 
 if __name__ == '__main__':
     main()

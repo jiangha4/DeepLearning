@@ -7,6 +7,9 @@ from torchvision import datasets, models, transforms
 from copy import deepcopy
 from torch.utils.data import Dataset
 import kmeans
+from sklearn.cluster import KMeans
+from sklearn.decomposition import PCA
+
 
 class CustomDataset(Dataset):
     def __init__(self, data, targets):
@@ -42,11 +45,11 @@ def get_custom_data(batch_size, size=1000):
             custom_dataset.targets.append(deepcopy(label))
             counter[label] += 1
 
-        if sum(counter) >= size*10:
+        if sum(counter) >= size * 10:
             break
 
-    trainloader = torch.utils.data.DataLoader(custom_dataset, batch_size=batch_size, shuffle=True)
-    testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size, shuffle=True)
+    trainloader = torch.utils.data.DataLoader(custom_dataset, batch_size=batch_size)
+    testloader = torch.utils.data.DataLoader(testset, batch_size=batch_size)
 
     return trainloader, testloader
 
@@ -61,7 +64,7 @@ def get_data():
 class Autoencoder(nn.Module):
     def __init__(self):
         super(Autoencoder, self).__init__()
-        self.encoder = nn.Sequential( # like the Composition layer you built
+        self.encoder = nn.Sequential(  # like the Composition layer you built
             nn.Conv2d(1, 16, 3, stride=2, padding=1),
             nn.ReLU(),
             nn.Conv2d(16, 32, 3, stride=2, padding=1),
@@ -85,7 +88,7 @@ class Autoencoder(nn.Module):
 
 def train(model, trainloader, num_epochs=5, learning_rate=1e-3):
     torch.manual_seed(42)
-    criterion = nn.MSELoss() # mean square error loss
+    criterion = nn.MSELoss()  # mean square error loss
     optimizer = torch.optim.Adam(model.parameters(),
                                  lr=learning_rate,
                                  weight_decay=1e-5)
@@ -99,60 +102,58 @@ def train(model, trainloader, num_epochs=5, learning_rate=1e-3):
             optimizer.step()
             optimizer.zero_grad()
 
-        print('Epoch:{}, Loss:{:.4f}'.format(epoch+1, float(loss)))
-        outputs.append((epoch, img, recon),)
+        print('Epoch:{}, Loss:{:.4f}'.format(epoch + 1, float(loss)))
+        outputs.append((epoch, img, recon), )
     return outputs
 
+
 def get_feature_vectors(model, testloader):
-    vectors = []
-    for data in testloader:
+    for i, data in enumerate(testloader):
         img, _ = data
         feature_vector = (model.encoder(img).reshape(len(img), 64)).detach().numpy()
-        vectors.append(feature_vector)
+        if i == 0:
+            vectors = feature_vector
+        else:
+            vectors = np.concatenate((vectors, feature_vector), axis=0)
     return vectors
 
-def main():
-    trainloader, testloader = get_custom_data(64)
-    train_data, train_labels, test_data, test_labels = kmeans.get_custom_data()
-    train_data = train_data.reshape(len(train_data), -1)
-    test_data = test_data.reshape(len(test_data), -1)
-
-    model = Autoencoder()
-    max_epochs = 2
-    outputs = train(model, trainloader, num_epochs=max_epochs)
+def run_feature_map_kmeans(train_vectors, test_vectors, test_labels):
 
     kmeans_model = kmeans.KMeans(init="k-means++", n_clusters=10, n_init=4, random_state=0)
 
-    vectors = get_feature_vectors(model, testloader)
-    #
-    kmeans_model = kmeans_model.fit(train_data)
-    results = kmeans_model.predict(vectors)
+    kmeans_model = kmeans_model.fit(train_vectors)
+    results = kmeans_model.predict(test_vectors)
     acc = kmeans.accuracy(test_labels, results)
     print(acc)
 
-    # for k in range(0, max_epochs, 5):
-    #     plt.figure(figsize=(9, 2))
-    #     for i, item in enumerate(vectors):
-    #         if i >= 9: break
-    #         plt.subplot(2, 9, 9 + i + 1)
-    #         plt.imshow(item[0])
-    # plt.show()
+def run_pca(train_vectors, test_vectors, test_labels):
+    pca = PCA(n_components=10).fit(train_vectors)
+    pca_test_vectors = pca.fit_transform(test_vectors)
+    pca_train_vectors = pca.fit_transform(train_vectors)
 
-    for k in range(0, max_epochs, 5):
-        plt.figure(figsize=(9, 2))
-        imgs = outputs[k][1].detach().numpy()
-        recon = outputs[k][2].detach().numpy()
-        for i, item in enumerate(imgs):
-            if i >= 9: break
-            plt.subplot(2, 9, i + 1)
-            plt.imshow(item[0])
+    kmeans_model = KMeans(init="k-means++", n_clusters=10, n_init=4)
 
-        for i, item in enumerate(recon):
-            if i >= 9: break
-            plt.subplot(2, 9, 9 + i + 1)
-            plt.imshow(item[0])
+    kmeans_model = kmeans_model.fit(pca_train_vectors)
+    results = kmeans_model.predict(pca_test_vectors)
+    acc = kmeans.accuracy(test_labels, results)
+    print(acc)
 
-    plt.show()
+def main():
+    trainloader, testloader = get_custom_data(64)
+    _, _, _, test_labels = kmeans.get_custom_data()
+
+    model = Autoencoder()
+    max_epochs = 20
+    train(model, trainloader, num_epochs=max_epochs)
+
+    train_vectors = get_feature_vectors(model, trainloader)
+    test_vectors = get_feature_vectors(model, testloader)
+
+    # part a
+    run_feature_map_kmeans(train_vectors, test_vectors, test_labels)
+
+    # part b
+    run_pca(train_vectors, test_vectors, test_labels)
 
 
 if __name__ == '__main__':

@@ -178,6 +178,7 @@ def retrieve_info(cluster_labels, y_train, kmeans):
 
     return reference_labels
 
+
 def calculate_metrics(model,output):
     print("Number of clusters is {}".format(model.n_clusters))
     print("Inertia : {}".format(model.inertia_))
